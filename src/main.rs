@@ -28,6 +28,7 @@ fn main() {
     println!("");
     println!("Voxel size: {}", h);
     println!("Voxel grid shape: {:?}", vox.shape());
+    // TODO: print number of voxels with value 1
 
     let end_time = std::time::Instant::now();
     println!("");

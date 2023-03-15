@@ -1,15 +1,16 @@
 pub mod progress_bar;
 
-use progress_bar::{pb_init, pb_update};
 use ndarray::prelude::*;
+use progress_bar::{pb_init, pb_update};
+use std::collections::HashMap;
+use std::fs::File;
 
 fn main() {
-
     let start_time = std::time::Instant::now();
 
-    let (nodes, tets) = read_gmsh("mesh.msh");
+    let (nodes, tets) = read_gmsh("tests/mesh.msh");
 
-    let mut tets_nodes : Array3<f64>;
+    let mut tets_nodes: Array3<f64>;
     tets_nodes = Array3::<f64>::zeros((tets.shape()[0], 4, 3));
     for (i, tet) in tets.outer_iter().enumerate() {
         for (j, node) in tet.iter().enumerate() {
@@ -24,178 +25,172 @@ fn main() {
     println!("Number of nodes: {}", nodes.shape()[0]);
 
     let (vox, h) = tets2vox(&tets_nodes, 100.0);
+    let n_vox = vox.iter().filter(|&&x| x == 1).count();
 
     println!("");
     println!("Voxel size: {}", h);
     println!("Voxel grid shape: {:?}", vox.shape());
-    // TODO: print number of voxels with value 1
+    println!("Filled voxels: {}", n_vox);
 
     let end_time = std::time::Instant::now();
     println!("");
-    println!("Elapsed time: {} seconds", end_time.duration_since(start_time).as_secs_f64());
+    println!(
+        "Elapsed time: {} seconds",
+        end_time.duration_since(start_time).as_secs_f64()
+    );
 }
 
-// TODO: implement function vox2gmsh
-// fn vox2gmsh(voxels: &Array3<i32>, dx: f64, file: &str){
+fn vox2gmsh(voxels: &Array3<i32>, dx: f64, file: &str) {
+    // Constants
 
-//     let mappa_r = vec![
-//         vec![0, 0, 1, -1, -1, 1, 0, -1, -1, 5, 4],
-//         vec![0, 0, -1, 3, 2, -1, -1, 7, 6, -1, -1],
-//         vec![0, -1, 0, -1, -1, -1, -1, 0, 1, 2, 3],
-//         vec![0, 1, 0, 4, 5, 6, 7, -1, -1, -1, -1],
-//         vec![1, 0, 0, -1, 0, 3, -1, -1, 4, 7, -1],
-//         vec![-1, 0, 0, 1, -1, -1, 2, 5, -1, -1, 6],
-//         vec![-1, 1, -1, 6, -1, -1, -1, -1, -1, -1, -1],
-//         vec![1, 1, -1, -1, 7, -1, -1, -1, -1, -1, -1],
-//         vec![1, 1, 1, -1, -1, 4, -1, -1, -1, -1, -1],
-//         vec![-1, 1, 1, -1, -1, -1, 5, -1, -1, -1, -1],
-//         vec![-1, -1, -1, -1, -1, -1, -1, 2, -1, -1, -1],
-//         vec![1, -1, -1, -1, -1, -1, -1, -1, 3, -1, -1],
-//         vec![1, -1, 1, -1, -1, -1, -1, -1, -1, 0, -1],
-//         vec![-1, -1, 1, -1, -1, -1, -1, -1, -1, -1, 1],
-//         vec![0, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-//         vec![1, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1],
-//         vec![0, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1],
-//         vec![-1, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1],
-//         vec![0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-//         vec![1, -1, 0, -1, -1, -1, -1, -1, -1, -1, -1],
-//         vec![1, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-//         vec![-1, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-//         vec![-1, 0, 1, -1, -1, -1, -1, -1, -1, -1, -1],
-//         vec![0, -1, 1, -1, -1, -1, -1, -1, -1, -1, -1],
-//         vec![1, 0, 1, -1, -1, -1, -1, -1, -1, -1, -1],
-//         vec![0, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-//         vec![0, 0, 1, -1, -1, -1, -1, -1, -1, -1, -1],
-//         vec![0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1],
-//         vec![0, -1, 0, -1, -1, -1, -1, -1, -1, -1, -1],
-//         vec![0, 0, 0, -1, -1, -1, -1, -1, -1, -1, -1],
-//     ];
+    // Map of faces to stitch together as a list
+    // of tuples (vector_offsets, faces_to_stitch)
+    let stitch_map: Vec<(Vec<i32>, Vec<i32>)> = vec![
+        (vec![0, 0, 1], vec![-1, -1, 1, 0, -1, -1, 5, 4]), // top
+        (vec![0, 0, -1], vec![3, 2, -1, -1, 7, 6, -1, -1]), // bot
+        (vec![0, -1, 0], vec![-1, -1, -1, -1, 0, 1, 2, 3]), // front
+        (vec![0, 1, 0], vec![4, 5, 6, 7, -1, -1, -1, -1]), // back
+        (vec![1, 0, 0], vec![-1, 0, 3, -1, -1, 4, 7, -1]), // right
+        (vec![-1, 0, 0], vec![1, -1, -1, 2, 5, -1, -1, 6]), // left
+        (vec![-1, 1, -1], vec![6, -1, -1, -1, -1, -1, -1, -1]), // 0
+        (vec![1, 1, -1], vec![-1, 7, -1, -1, -1, -1, -1, -1]), // 1
+        (vec![1, 1, 1], vec![-1, -1, 4, -1, -1, -1, -1, -1]), // 2
+        (vec![-1, 1, 1], vec![-1, -1, -1, 5, -1, -1, -1, -1]), // 3
+        (vec![-1, -1, -1], vec![-1, -1, -1, -1, 2, -1, -1, -1]), // 4
+        (vec![1, -1, -1], vec![-1, -1, -1, -1, -1, 3, -1, -1]), // 5
+        (vec![1, -1, 1], vec![-1, -1, -1, -1, -1, -1, 0, -1]), // 6
+        (vec![-1, -1, 1], vec![-1, -1, -1, -1, -1, -1, -1, 1]), // 7
+        (vec![0, 1, -1], vec![7, 6, -1, -1, -1, -1, -1, -1]), // 0-1
+        (vec![1, 1, 0], vec![-1, 4, 7, -1, -1, -1, -1, -1]), // 1-2
+        (vec![0, 1, 1], vec![-1, -1, 4, 5, -1, -1, -1, -1]), // 2-3
+        (vec![-1, 1, 0], vec![5, -1, -1, 6, -1, -1, -1, -1]), // 3-0
+        (vec![0, -1, -1], vec![-1, -1, -1, -1, 3, 2, -1, -1]), // 4-5
+        (vec![1, -1, 0], vec![-1, -1, -1, -1, -1, 0, 3, -1]), // 5-6
+        (vec![0, -1, 1], vec![-1, -1, -1, -1, -1, -1, 1, 0]), // 6-7
+        (vec![-1, -1, 0], vec![-1, -1, -1, -1, 1, -1, -1, 2]), // 7-4
+        (vec![-1, 0, -1], vec![2, -1, -1, -1, 6, -1, -1, -1]), // 0-4
+        (vec![1, 0, -1], vec![-1, 3, -1, -1, -1, 7, -1, -1]), // 1-5
+        (vec![1, 0, 1], vec![-1, -1, 0, -1, -1, -1, 4, -1]), // 2-6
+        (vec![-1, 0, 1], vec![-1, -1, -1, 1, -1, -1, -1, 5]), // 3-7
+    ];
 
-//     let mappa_o = vec![
-//         vec![0, 0, 1],
-//         vec![0, 0, -1],
-//         vec![0, -1, 0],
-//         vec![0, 1, 0],
-//         vec![1, 0, 0],
-//         vec![-1, 0, 0],
-//         vec![-1, 1, -1],
-//         vec![1, 1, -1],
-//         vec![1, 1, 1],
-//         vec![-1, 1, 1],
-//         vec![-1, -1, -1],
-//         vec![1, -1, -1],
-//         vec![1, -1, 1],
-//         vec![-1, -1, 1],
-//         vec![0, 1, -1],
-//         vec![1, 1, 0],
-//         vec![0, 1, 1],
-//         vec![-1, 1, 0],
-//         vec![0, -1, -1],
-//         vec![1, -1, 0],
-//         vec![0, -1, 1],
-//         vec![-1, -1, 0],
-//         vec![-1, 0, -1],
-//         vec![1, 0, -1],
-//         vec![1, 0, 1],
-//         vec![-1, 0, 1]
-//     ];
+    let offsets = vec![
+        vec![-0.5, 0.5, -0.5],
+        vec![0.5, 0.5, -0.5],
+        vec![0.5, 0.5, 0.5],
+        vec![-0.5, 0.5, 0.5],
+        vec![-0.5, -0.5, -0.5],
+        vec![0.5, -0.5, -0.5],
+        vec![0.5, -0.5, 0.5],
+        vec![-0.5, -0.5, 0.5],
+    ];
 
-//     let offsets = vec![
-//         vec![-0.5, 0.5, -0.5],
-//         vec![0.5, 0.5, -0.5],
-//         vec![0.5, 0.5, 0.5],
-//         vec![-0.5, 0.5, 0.5],
-//         vec![-0.5, -0.5, -0.5],
-//         vec![0.5, -0.5, -0.5],
-//         vec![0.5, -0.5, 0.5],
-//         vec![-0.5, -0.5, 0.5],
-//     ];
+    let ncell = voxels.iter().filter(|&&x| x != 0).count();
 
-//     // Python code to convert to Rust. mappa['o'] is mappa_o, mappa['r'] is mappa_r
-//     // all_faces = []
-//     // nodes = []
-//     // cubes = {}
+    let mut all_faces: Vec<Vec<i32>> = Vec::with_capacity(ncell * 6);
+    let mut nodes = vec![];
+    let mut cubes: HashMap<(usize, usize, usize), Vec<i32>> = HashMap::new();
 
-//     // for (i, j, k), vox in np.ndenumerate(voxels):
-//     //     if vox == 0:
-//     //         continue
-//     //     ijk = np.array([i, j, k])
-//     //     # move mesh to origin as minimum and find cube
-//     //     coord = (ijk + 0.5) * dx
+    for (ijk, v) in voxels.indexed_iter() {
+        if *v == 0 {
+            continue;
+        }
 
-//     //     cube = np.array([-1, -1, -1, -1, -1, -1, -1, -1])
-//     //     for m in mappa:
-//     //         if (i+m['o'][0], j+m['o'][1], k+m['o'][2]) in cubes:
-//     //             for p, id in enumerate(m['r']):
-//     //                 if id >= 0:
-//     //                     cube[p] = cubes[(i+m['o'][0], j+m['o'][1], k+m['o'][2])][id]
+        // move mesh to origin as minimum and find cube
+        let mut coord = vec![ijk.0 as f64, ijk.1 as f64, ijk.2 as f64];
+        coord = coord.iter().map(|x| (x + 0.5) * dx).collect();
 
-//     //     for p, c in enumerate(cube):
-//     //         if c < 0:
-//     //             offset = offsets[p]
-//     //             point = coord + offset
-//     //             nodes.append(point)
-//     //             cube[p] = len(nodes) - 1
-        
-//     //     cubes[i,j,k] = cube.tolist()
+        // Initialize cube as 1D vector of 8 nodes (-1)
+        let mut cube = Array::from_elem((8,), -1);
 
-//     //     all_faces.append(cube[np.array([4, 5, 6, 7])])
-//     //     all_faces.append(cube[np.array([1, 0, 3, 2])])
-//     //     all_faces.append(cube[np.array([1, 5, 6, 2])])
-//     //     all_faces.append(cube[np.array([0, 4, 7, 3])])
-//     //     all_faces.append(cube[np.array([7, 6, 2, 3])])
-//     //     all_faces.append(cube[np.array([0, 1, 5, 4])])
+        // Iterate over stich_map
+        for (_, (stitch, faces)) in stitch_map.iter().enumerate() {
+            // check if tuple is a key in cubes
+            let stitch = stitch.iter().map(|x| *x as usize).collect::<Vec<usize>>();
+            let tup = (ijk.0 + stitch[0], ijk.1 + stitch[1], ijk.2 + stitch[2]);
+            if cubes.contains_key(&ijk) {
+                // iterate over faces
+                for (j, face) in faces.iter().enumerate() {
+                    if *face >= 0 {
+                        cube[j] = cubes[&tup][*face as usize];
+                    }
+                }
+            }
+        }
 
-//     let mut all_faces = Vec::new();
-//     let mut nodes: Vec<i = Vec::new();
-//     let mut cubes = HashMap::new();
+        // Iterate over cube
+        for i in 0..cube.len() {
+            let node = cube[i];
+            if node < 0 {
+                let mut new_node = vec![
+                    coord[0] + offsets[i][0],
+                    coord[1] + offsets[i][1],
+                    coord[2] + offsets[i][2],
+                ];
+                new_node = new_node.iter().map(|x| *x).collect();
+                nodes.push(new_node);
+                cube[i] = nodes.len() as i32 - 1;
+            }
+        }
 
-//     println!("{}", nodes)
+        cubes.insert(ijk, cube.to_vec());
 
-//     for (i, j) in voxels.indexed_iter() {
-//         if *j == 0 {
-//             continue;
-//         }
-//         let ijk: Array1<f64> = array![i.0 as f64, i.1 as f64, i.2 as f64];
-//         const ONES : Array1<f64> = array![1., 1., 1.];
-//         let coord = (ijk + 0.5 * ONES) * dx;
+        all_faces.push(vec![cube[4], cube[5], cube[6], cube[7]]);
+        all_faces.push(vec![cube[1], cube[0], cube[3], cube[2]]);
+        all_faces.push(vec![cube[1], cube[5], cube[6], cube[2]]);
+        all_faces.push(vec![cube[0], cube[4], cube[7], cube[3]]);
+        all_faces.push(vec![cube[7], cube[6], cube[2], cube[3]]);
+        all_faces.push(vec![cube[0], cube[1], cube[5], cube[4]]);
+    }
 
-//         let mut cube = array![-1 as i32, -1, -1, -1, -1, -1, -1, -1];
-//         for m in mappa_o.iter().zip(mappa_r.iter()) {
-//             if let Some(c) = cubes.get(&(i.0 + m.0[0], i.1 + m.0[1], i.2 + m.0[2])) {
-//                 for (p, id) in m.1.iter().enumerate() {
-//                     if *id >= 0 {
-//                         cube[p] = c[*id as usize];
-//                     }
-//                 }
-//             }
-//         }
+    // Filter all faces that have no duplicates
+    let mut bfaces = all_faces
+        .into_iter() // convert to iterator
+        .map(|mut face| {
+            face.sort();
+            face
+        }) // sort the elements of each face
+        .collect::<Vec<Vec<i32>>>()
+        .into_iter()
+        .collect::<std::collections::HashSet<Vec<i32>>>() // convert to hash set
+        .into_iter()
+        .collect::<Vec<Vec<i32>>>(); // convert back to vector
 
-//         for (p, c) in cube.iter_mut().enumerate() {
-//             if *c < 0 {
-//                 let offset = offsets[p];
-//                 let point = coord + offset;
-//                 nodes.push(point);
-//                 *c = nodes.len() - 1;
-//             }
-//         }
+    // # export mesh
+    // with open(file, 'w') as f:
+    //     f.write('$MeshFormat\n')
+    //     f.write('2.2 0 8\n')
+    //     f.write('$EndMeshFormat\n')
+    //     f.write('$Nodes\n')
+    //     f.write(f'{len(nodes)}\n')
+    //     for i, mnode in enumerate(nodes):
+    //         f.write(f'{i+1}\t{mnode[0]}\t{mnode[1]}\t{mnode[2]}\n')
+    //     f.write('$EndNodes\n')
+    //     f.write('$Elements\n')
+    //     f.write(f'{len(cubes)+len(bfaces)}\n')
+    //     count = 0
+    //     for bface in bfaces:
+    //         count += 1
+    //         f.write(f'{count}\t3\t2\t1\t0\t{bface[0]+1}\t{bface[1]+1}\t{bface[2]+1}\t{bface[3]+1}\n')
+    //     for xyz, nodes in cubes.items():
+    //         count += 1
+    //         f.write(f'{count}\t5\t2\t1\t0\t{nodes[0]+1}\t{nodes[1]+1}\t{nodes[2]+1}\t{nodes[3]+1}\t{nodes[4]+1}\t{nodes[5]+1}\t{nodes[6]+1}\t{nodes[7]+1}\n')
+    //     f.write('$EndElements\n')
+    //     f.write('\n')
 
-//         cubes.insert((i.0, i.1, i.2), cube);
+    // open file
+    let mut f = File::create(file).unwrap();
+    
 
-//         all_faces.push([cube[4], cube[5], cube[6], cube[7]]);
-//         all_faces.push([cube[1], cube[0], cube[3], cube[2]]);
-//         all_faces.push([cube[1], cube[5], cube[6], cube[2]]);
-//         all_faces.push([cube[0], cube[4], cube[7], cube[3]]);
-//         all_faces.push([cube[7], cube[6], cube[2], cube[3]]);
-//         all_faces.push([cube[0], cube[1], cube[5], cube[4]]);
-//     }
 
-// }
+
+}
 
 fn tets2vox(tets: &Array3<f64>, res: f64) -> (Array3<i32>, f64) {
     let mut vox: Array3<i32> = Array3::<i32>::zeros((res as usize, res as usize, res as usize));
 
-    let dim = tets.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y)) - tets.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y));
+    let dim = tets.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))
+        - tets.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y));
 
     // h is the voxel size (scalar, since the voxels are cubic)
     let dx = dim.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y)) / res;
@@ -207,12 +202,42 @@ fn tets2vox(tets: &Array3<f64>, res: f64) -> (Array3<i32>, f64) {
         let min_point = tet.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y));
         let tet = tet.to_owned() - min_point;
         let tet: Array2<f64> = tet.into_shape((4, 3)).unwrap();
-        let min_x = ((tet[[0, 0]].min(tet[[1, 0]]).min(tet[[2, 0]]).min(tet[[3, 0]])) / h).round() as usize;
-        let max_x = ((tet[[0, 0]].max(tet[[1, 0]]).max(tet[[2, 0]]).max(tet[[3, 0]])) / h).round() as usize;
-        let min_y = ((tet[[0, 1]].min(tet[[1, 1]]).min(tet[[2, 1]]).min(tet[[3, 1]])) / h).round() as usize;
-        let max_y = ((tet[[0, 1]].max(tet[[1, 1]]).max(tet[[2, 1]]).max(tet[[3, 1]])) / h).round() as usize;
-        let min_z = ((tet[[0, 2]].min(tet[[1, 2]]).min(tet[[2, 2]]).min(tet[[3, 2]])) / h).round() as usize;
-        let max_z = ((tet[[0, 2]].max(tet[[1, 2]]).max(tet[[2, 2]]).max(tet[[3, 2]])) / h).round() as usize;
+        let min_x = ((tet[[0, 0]]
+            .min(tet[[1, 0]])
+            .min(tet[[2, 0]])
+            .min(tet[[3, 0]]))
+            / h)
+            .round() as usize;
+        let max_x = ((tet[[0, 0]]
+            .max(tet[[1, 0]])
+            .max(tet[[2, 0]])
+            .max(tet[[3, 0]]))
+            / h)
+            .round() as usize;
+        let min_y = ((tet[[0, 1]]
+            .min(tet[[1, 1]])
+            .min(tet[[2, 1]])
+            .min(tet[[3, 1]]))
+            / h)
+            .round() as usize;
+        let max_y = ((tet[[0, 1]]
+            .max(tet[[1, 1]])
+            .max(tet[[2, 1]])
+            .max(tet[[3, 1]]))
+            / h)
+            .round() as usize;
+        let min_z = ((tet[[0, 2]]
+            .min(tet[[1, 2]])
+            .min(tet[[2, 2]])
+            .min(tet[[3, 2]]))
+            / h)
+            .round() as usize;
+        let max_z = ((tet[[0, 2]]
+            .max(tet[[1, 2]])
+            .max(tet[[2, 2]])
+            .max(tet[[3, 2]]))
+            / h)
+            .round() as usize;
 
         for i in min_x..max_x {
             for j in min_y..max_y {
@@ -234,7 +259,12 @@ fn tets2vox(tets: &Array3<f64>, res: f64) -> (Array3<i32>, f64) {
             }
         }
 
-        old_nbars = pb_update((c + 1).try_into().unwrap(), tets.shape()[0].try_into().unwrap(), old_nbars, 40);
+        old_nbars = pb_update(
+            (c + 1).try_into().unwrap(),
+            tets.shape()[0].try_into().unwrap(),
+            old_nbars,
+            40,
+        );
     }
 
     (vox, *h)
@@ -244,11 +274,10 @@ fn read_gmsh(file: &str) -> (Array2<f64>, Array2<i32>) {
     let lines = std::fs::read_to_string(file).unwrap();
     let lines: Vec<&str> = lines.split("\r").collect();
 
-    
     if lines[1].split(" ").collect::<Vec<&str>>()[0].trim() != "2.2" {
         panic!("Only Gmsh 2.2 is supported");
     }
-    
+
     let nnode = lines[4].trim().parse::<usize>().unwrap();
     let mut nodes = Array2::<f64>::zeros((nnode, 3));
 
@@ -274,18 +303,44 @@ fn read_gmsh(file: &str) -> (Array2<f64>, Array2<i32>) {
         }
     }
 
-    let out_tets = Array2::from_shape_vec((tets.len(), 4), tets.into_iter().flatten().collect()).unwrap();
+    let out_tets =
+        Array2::from_shape_vec((tets.len(), 4), tets.into_iter().flatten().collect()).unwrap();
 
     (nodes, out_tets)
 }
 
 fn is_point_in_tet(p: &Array1<f64>, tet: &Array2<f64>) -> bool {
-    let v = signed_volume(&tet.row(0).to_owned(), &tet.row(1).to_owned(), &tet.row(2).to_owned(), &tet.row(3).to_owned());
+    let v = signed_volume(
+        &tet.row(0).to_owned(),
+        &tet.row(1).to_owned(),
+        &tet.row(2).to_owned(),
+        &tet.row(3).to_owned(),
+    );
 
-    let alpha = signed_volume(&p, &tet.row(1).to_owned(), &tet.row(2).to_owned(), &tet.row(3).to_owned()) / v;
-    let beta = signed_volume(&tet.row(0).to_owned(), &p, &tet.row(2).to_owned(), &tet.row(3).to_owned()) / v;
-    let gamma = signed_volume(&tet.row(0).to_owned(), &tet.row(1).to_owned(), p, &tet.row(3).to_owned()) / v;
-    let delta = signed_volume(&tet.row(0).to_owned(), &tet.row(1).to_owned(), &tet.row(2).to_owned(), &p) / v;
+    let alpha = signed_volume(
+        &p,
+        &tet.row(1).to_owned(),
+        &tet.row(2).to_owned(),
+        &tet.row(3).to_owned(),
+    ) / v;
+    let beta = signed_volume(
+        &tet.row(0).to_owned(),
+        &p,
+        &tet.row(2).to_owned(),
+        &tet.row(3).to_owned(),
+    ) / v;
+    let gamma = signed_volume(
+        &tet.row(0).to_owned(),
+        &tet.row(1).to_owned(),
+        p,
+        &tet.row(3).to_owned(),
+    ) / v;
+    let delta = signed_volume(
+        &tet.row(0).to_owned(),
+        &tet.row(1).to_owned(),
+        &tet.row(2).to_owned(),
+        &p,
+    ) / v;
 
     alpha >= 0.0 && beta >= 0.0 && gamma >= 0.0 && delta >= 0.0
 }

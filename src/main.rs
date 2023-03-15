@@ -4,6 +4,7 @@ use ndarray::prelude::*;
 use progress_bar::{pb_init, pb_update};
 use std::collections::HashMap;
 use std::fs::File;
+use std::io::prelude::*;
 
 fn main() {
     let start_time = std::time::Instant::now();
@@ -24,13 +25,15 @@ fn main() {
     println!("Number of tetrahedra: {}", tets_nodes.shape()[0]);
     println!("Number of nodes: {}", nodes.shape()[0]);
 
-    let (vox, h) = tets2vox(&tets_nodes, 100.0);
+    let (vox, h) = tets2vox(&tets_nodes, 4.0);
     let n_vox = vox.iter().filter(|&&x| x == 1).count();
 
     println!("");
     println!("Voxel size: {}", h);
     println!("Voxel grid shape: {:?}", vox.shape());
     println!("Filled voxels: {}", n_vox);
+
+    vox2gmsh(&vox, h, "tests/voxels.msh");
 
     let end_time = std::time::Instant::now();
     println!("");
@@ -144,7 +147,7 @@ fn vox2gmsh(voxels: &Array3<i32>, dx: f64, file: &str) {
     }
 
     // Filter all faces that have no duplicates
-    let mut bfaces = all_faces
+    let bfaces = all_faces
         .into_iter() // convert to iterator
         .map(|mut face| {
             face.sort();
@@ -156,34 +159,57 @@ fn vox2gmsh(voxels: &Array3<i32>, dx: f64, file: &str) {
         .into_iter()
         .collect::<Vec<Vec<i32>>>(); // convert back to vector
 
-    // # export mesh
-    // with open(file, 'w') as f:
-    //     f.write('$MeshFormat\n')
-    //     f.write('2.2 0 8\n')
-    //     f.write('$EndMeshFormat\n')
-    //     f.write('$Nodes\n')
-    //     f.write(f'{len(nodes)}\n')
-    //     for i, mnode in enumerate(nodes):
-    //         f.write(f'{i+1}\t{mnode[0]}\t{mnode[1]}\t{mnode[2]}\n')
-    //     f.write('$EndNodes\n')
-    //     f.write('$Elements\n')
-    //     f.write(f'{len(cubes)+len(bfaces)}\n')
-    //     count = 0
-    //     for bface in bfaces:
-    //         count += 1
-    //         f.write(f'{count}\t3\t2\t1\t0\t{bface[0]+1}\t{bface[1]+1}\t{bface[2]+1}\t{bface[3]+1}\n')
-    //     for xyz, nodes in cubes.items():
-    //         count += 1
-    //         f.write(f'{count}\t5\t2\t1\t0\t{nodes[0]+1}\t{nodes[1]+1}\t{nodes[2]+1}\t{nodes[3]+1}\t{nodes[4]+1}\t{nodes[5]+1}\t{nodes[6]+1}\t{nodes[7]+1}\n')
-    //     f.write('$EndElements\n')
-    //     f.write('\n')
-
     // open file
     let mut f = File::create(file).unwrap();
-    
 
+    // write header
+    writeln!(f, "$MeshFormat").unwrap();
+    writeln!(f, "2.2 0 8").unwrap();
+    writeln!(f, "$EndMeshFormat").unwrap();
 
+    // write nodes
+    writeln!(f, "$Nodes").unwrap();
+    writeln!(f, "{}", nodes.len()).unwrap();
+    for (i, mnode) in nodes.iter().enumerate() {
+        writeln!(f, "{}\t{}\t{}\t{}", i + 1, mnode[0], mnode[1], mnode[2]).unwrap();
+    }
+    writeln!(f, "$EndNodes").unwrap();
 
+    // write elements
+    writeln!(f, "$Elements").unwrap();
+    writeln!(f, "{}", cubes.len() + bfaces.len()).unwrap();
+    let mut count = 0;
+    for bface in bfaces {
+        count += 1;
+        writeln!(
+            f,
+            "{}\t3\t2\t1\t0\t{}\t{}\t{}\t{}",
+            count,
+            bface[0] + 1,
+            bface[1] + 1,
+            bface[2] + 1,
+            bface[3] + 1
+        )
+        .unwrap();
+    }
+    for (_, nodes) in cubes {
+        count += 1;
+        writeln!(
+            f,
+            "{}\t5\t2\t1\t0\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            count,
+            nodes[0] + 1,
+            nodes[1] + 1,
+            nodes[2] + 1,
+            nodes[3] + 1,
+            nodes[4] + 1,
+            nodes[5] + 1,
+            nodes[6] + 1,
+            nodes[7] + 1
+        )
+        .unwrap();
+    }
+    writeln!(f, "$EndElements").unwrap();
 }
 
 fn tets2vox(tets: &Array3<f64>, res: f64) -> (Array3<i32>, f64) {

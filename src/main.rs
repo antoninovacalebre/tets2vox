@@ -110,25 +110,25 @@ fn tets2vox(tets: &Array3<f64>, res: usize) -> (Array3<i64>, f64) {
 
         let tet: Array2<f64> = tet.into_shape((4, 3)).unwrap();
         let min_x =
-            (tet.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))[0] / h).round() as usize;
+            (tet.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))[0] / h) as usize;
         let max_x =
-            (tet.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))[0] / h).round() as usize;
+            (tet.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))[0] / h) as usize;
         let min_y =
-            (tet.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))[1] / h).round() as usize;
+            (tet.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))[1] / h) as usize;
         let max_y =
-            (tet.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))[1] / h).round() as usize;
+            (tet.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))[1] / h) as usize;
         let min_z =
-            (tet.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))[2] / h).round() as usize;
+            (tet.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))[2] / h) as usize;
         let max_z =
-            (tet.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))[2] / h).round() as usize;
+            (tet.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))[2] / h) as usize;
 
         let max_x = max_x.min(res - 1);
         let max_y = max_y.min(res - 1);
         let max_z = max_z.min(res - 1);
 
-        for i in min_x..max_x {
-            for j in min_y..max_y {
-                for k in min_z..max_z {
+        for i in min_x..=max_x {
+            for j in min_y..=max_y {
+                for k in min_z..=max_z {
                     if vox[[i, j, k]] == 1 {
                         continue;
                     }
@@ -179,7 +179,7 @@ fn read_gmsh(file: &str) -> (Array2<f64>, Array2<i64>) {
     let mut tets = Vec::new();
 
     for i in 0..nelem {
-        let line = lines[8 + nnode + i].split(" ").collect::<Vec<&str>>();
+        let line = lines[8 + nnode + i].split_whitespace().collect::<Vec<&str>>();
         if line[1] == "4" {
             tets.push([
                 line[5].trim().parse::<i64>().unwrap() - 1,
@@ -203,7 +203,6 @@ fn is_point_in_tet(p: &Array1<f64>, tet: &Array2<f64>) -> bool {
         &tet.row(2).to_owned(),
         &tet.row(3).to_owned(),
     );
-
     let alpha = signed_volume(
         &p,
         &tet.row(1).to_owned(),

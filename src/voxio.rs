@@ -73,14 +73,10 @@ pub fn vox2gmsh(voxels: &Array3<i64>, dx: f64, file: &str) {
         // Iterate over stich_map
         for (_, (neighbour_offset, faces)) in stitch_map.iter().enumerate() {
             // check if tuple is a key in cubes
-            let neighbour_offset = neighbour_offset
-                .iter()
-                .map(|x| *x as usize)
-                .collect::<Vec<usize>>();
             let neighbour = (
-                voxel.0 + neighbour_offset[0],
-                voxel.1 + neighbour_offset[1],
-                voxel.2 + neighbour_offset[2],
+                (voxel.0 as i64 + neighbour_offset[0]) as usize,
+                (voxel.1 as i64 + neighbour_offset[1]) as usize,
+                (voxel.2 as i64 + neighbour_offset[2]) as usize,
             );
             if cubes.contains_key(&neighbour) {
                 // iterate over faces

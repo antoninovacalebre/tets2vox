@@ -1,5 +1,5 @@
 # tets2vox
-Converts tetrahedral meshes to voxel meshes (gmsh 2.2 format)
+Converts tetrahedral meshes to voxel meshes (gmsh 2.2 format).
 
 ## Usage
 

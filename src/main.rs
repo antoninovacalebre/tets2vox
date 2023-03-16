@@ -8,7 +8,7 @@ use progress_bar::{pb_init, pb_update};
 use voxio::vox2gmsh;
 
 fn main() {
-    let start_time = std::time::Instant::now();
+    let tets2vox_time = std::time::Instant::now();
 
     let matches = command!()
         .help_template(
@@ -23,21 +23,22 @@ fn main() {
         .arg(
             arg!(-i --input ... "Input file")
                 .required(true)
-                .action(ArgAction::Set),
+                .action(ArgAction::Set)
         )
         .arg(
             arg!(-o --output ... "Output file")
                 .required(true)
-                .action(ArgAction::Set),
+                .action(ArgAction::Set)
         )
         .arg(
             arg!(-r --res ... "Resolution")
                 .required(true)
-                .action(ArgAction::Set),
+                .action(ArgAction::Set)
+                .value_parser(clap::value_parser!(usize))
         )
         .get_matches();
 
-    let res: usize = *matches.get_one::<usize>("res").unwrap();
+    let res = matches.get_one::<usize>("res").unwrap();
     let input_file = matches.get_one::<String>("input").unwrap();
     let output_file = matches.get_one::<String>("output").unwrap();
 
@@ -57,7 +58,10 @@ fn main() {
     println!("Number of tetrahedra: {}", tets_nodes.shape()[0]);
     println!("Number of nodes: {}", nodes.shape()[0]);
 
-    let (vox, h) = tets2vox(&tets_nodes, res);
+    let (vox, h) = tets2vox(&tets_nodes, *res);
+
+    println!("Took {} seconds", tets2vox_time.elapsed().as_secs_f64());
+
     let n_vox = vox.iter().filter(|&&x| x == 1).count();
 
     println!("");
@@ -66,6 +70,8 @@ fn main() {
     println!("Filled voxels: {}", n_vox);
 
     // vox2txt(&vox, "tests/voxels.txt");
+    println!("");
+    println!("Writing to file: {}", output_file);
 
     vox2gmsh(&vox, h, output_file);
 
@@ -73,12 +79,12 @@ fn main() {
     println!("");
     println!(
         "Elapsed time: {} seconds",
-        end_time.duration_since(start_time).as_secs_f64()
+        end_time.duration_since(tets2vox_time).as_secs_f64()
     );
 }
 
-fn tets2vox(tets: &Array3<f64>, res: usize) -> (Array3<i32>, f64) {
-    let mut vox: Array3<i32> = Array3::<i32>::zeros((res, res, res));
+fn tets2vox(tets: &Array3<f64>, res: usize) -> (Array3<i64>, f64) {
+    let mut vox: Array3<i64> = Array3::<i64>::zeros((res, res, res));
 
     // Get the dimensions of the tetrahedra
     let dim: Array1<f64> = tets
@@ -88,9 +94,7 @@ fn tets2vox(tets: &Array3<f64>, res: usize) -> (Array3<i32>, f64) {
             .fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))
             .fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y));
 
-    println!("Dimensions: {:?}", dim);
-
-    let dx = dim.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y)) / (res as f64);
+    let dx = dim.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y)) / (res as f64);
     let h = dx.first().unwrap();
 
     // h is the voxel size (scalar, since the voxels are cubic)
@@ -117,6 +121,10 @@ fn tets2vox(tets: &Array3<f64>, res: usize) -> (Array3<i32>, f64) {
             (tet.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))[2] / h).round() as usize;
         let max_z =
             (tet.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))[2] / h).round() as usize;
+
+        let max_x = max_x.min(res - 1);
+        let max_y = max_y.min(res - 1);
+        let max_z = max_z.min(res - 1);
 
         for i in min_x..max_x {
             for j in min_y..max_y {
@@ -149,7 +157,7 @@ fn tets2vox(tets: &Array3<f64>, res: usize) -> (Array3<i32>, f64) {
     (vox, *h)
 }
 
-fn read_gmsh(file: &str) -> (Array2<f64>, Array2<i32>) {
+fn read_gmsh(file: &str) -> (Array2<f64>, Array2<i64>) {
     let lines = std::fs::read_to_string(file).unwrap();
     let lines: Vec<&str> = lines.split("\r").collect();
 
@@ -174,10 +182,10 @@ fn read_gmsh(file: &str) -> (Array2<f64>, Array2<i32>) {
         let line = lines[8 + nnode + i].split(" ").collect::<Vec<&str>>();
         if line[1] == "4" {
             tets.push([
-                line[5].trim().parse::<i32>().unwrap() - 1,
-                line[6].trim().parse::<i32>().unwrap() - 1,
-                line[7].trim().parse::<i32>().unwrap() - 1,
-                line[8].trim().parse::<i32>().unwrap() - 1,
+                line[5].trim().parse::<i64>().unwrap() - 1,
+                line[6].trim().parse::<i64>().unwrap() - 1,
+                line[7].trim().parse::<i64>().unwrap() - 1,
+                line[8].trim().parse::<i64>().unwrap() - 1,
             ]);
         }
     }

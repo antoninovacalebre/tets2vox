@@ -58,14 +58,14 @@ fn main() {
     println!("Number of tetrahedra: {}", tets_nodes.shape()[0]);
     println!("Number of nodes: {}", nodes.shape()[0]);
 
-    let (vox, h) = tets2vox(&tets_nodes, *res);
+    let (vox, dx, mesh_center) = tets2vox(&tets_nodes, *res);
 
     println!("Took {} seconds", tets2vox_time.elapsed().as_secs_f64());
 
     let n_vox = vox.iter().filter(|&&x| x == 1).count();
 
     println!("");
-    println!("Voxel size: {}", h);
+    println!("Voxel size: {}", dx);
     println!("Voxel grid shape: {:?}", vox.shape());
     println!("Filled voxels: {}", n_vox);
 
@@ -73,7 +73,7 @@ fn main() {
     println!("");
     println!("Writing to file: {}", output_file);
 
-    vox2gmsh(&vox, h, output_file);
+    vox2gmsh(&vox, dx, &mesh_center, output_file);
 
     let end_time = std::time::Instant::now();
     println!("");
@@ -83,7 +83,7 @@ fn main() {
     );
 }
 
-fn tets2vox(tets: &Array3<f64>, res: usize) -> (Array3<i64>, f64) {
+fn tets2vox(tets: &Array3<f64>, res: usize) -> (Array3<i64>, f64, Array1<f64>) {
     let mut vox: Array3<i64> = Array3::<i64>::zeros((res, res, res));
 
     // Get the dimensions of the tetrahedra
@@ -104,6 +104,13 @@ fn tets2vox(tets: &Array3<f64>, res: usize) -> (Array3<i64>, f64) {
         .fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))
         .fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y));
     let min_point = min_point;
+
+    let max_point = tets
+        .fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))
+        .fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y));
+    let max_point = max_point;
+
+    let mesh_center = (max_point.to_shared() + min_point.to_shared()) / 2.0;
 
     for (c, tet) in tets.outer_iter().enumerate() {
         let tet = tet.to_owned() - min_point.to_owned();
@@ -154,7 +161,7 @@ fn tets2vox(tets: &Array3<f64>, res: usize) -> (Array3<i64>, f64) {
         );
     }
 
-    (vox, *h)
+    (vox, *h, mesh_center.to_owned())
 }
 
 fn read_gmsh(file: &str) -> (Array2<f64>, Array2<i64>) {

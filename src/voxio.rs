@@ -4,7 +4,7 @@ use std::io::{BufWriter, Write};
 
 use ndarray::prelude::*;
 
-pub fn vox2gmsh(voxels: &Array3<i64>, dx: f64, file: &str) {
+pub fn vox2gmsh(voxels: &Array3<i64>, dx: f64, mesh_center:&Array1<f64>, file: &str) {
     // Map of faces to stitch together as a list
     // of tuples (vector_offsets, faces_to_stitch)
     let stitch_map: Vec<(Vec<i64>, Vec<i64>)> = vec![
@@ -52,6 +52,8 @@ pub fn vox2gmsh(voxels: &Array3<i64>, dx: f64, file: &str) {
         .map(|x| x.iter().map(|y| y * dx).collect())
         .collect::<Vec<Vec<f64>>>();
 
+    let grid_center = vec![0.5 * (voxels.len_of(ndarray::Axis(0)) as f64) * dx, 0.5 * (voxels.len_of(ndarray::Axis(1)) as f64) * dx, 0.5 * (voxels.len_of(ndarray::Axis(2)) as f64) * dx];
+
     let ncell = voxels.iter().filter(|&&x| x != 0).count();
 
     let mut all_faces: Vec<Vec<i64>> = Vec::with_capacity(ncell * 6);
@@ -93,9 +95,9 @@ pub fn vox2gmsh(voxels: &Array3<i64>, dx: f64, file: &str) {
             let node = cube[i];
             if node < 0 {
                 let mut new_node = vec![
-                    coord[0] + offsets[i][0],
-                    coord[1] + offsets[i][1],
-                    coord[2] + offsets[i][2],
+                    coord[0] + offsets[i][0] - (grid_center[0] - mesh_center[0]),
+                    coord[1] + offsets[i][1] - (grid_center[1] - mesh_center[1]),
+                    coord[2] + offsets[i][2] - (grid_center[2] - mesh_center[2])
                 ];
                 new_node = new_node.iter().map(|x| *x).collect();
                 nodes.push(new_node);

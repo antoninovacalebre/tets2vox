@@ -90,8 +90,6 @@ fn main() {
 }
 
 fn tets2vox(tets: &Array3<f64>, res: usize) -> (Array3<i64>, f64, Array1<f64>) {
-    let mut vox: Array3<i64> = Array3::<i64>::zeros((res, res, res));
-
     // Get the dimensions of the tetrahedra
     let dim: Array1<f64> = tets
         .fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))
@@ -102,6 +100,11 @@ fn tets2vox(tets: &Array3<f64>, res: usize) -> (Array3<i64>, f64, Array1<f64>) {
 
     let dx = dim.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y)) / (res as f64);
     let h = dx.first().unwrap();
+
+    let resx: usize = (dim[0] / h).ceil() as usize;
+    let resy: usize = (dim[1] / h).ceil() as usize;
+    let resz: usize = (dim[2] / h).ceil() as usize;
+    let mut vox: Array3<i64> = Array3::<i64>::zeros((resx, resy, resz));
 
     // h is the voxel size (scalar, since the voxels are cubic)
 

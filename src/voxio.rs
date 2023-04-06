@@ -85,7 +85,9 @@ pub fn vox2gmsh(voxels: &Array3<i64>, dx: f64, mesh_center:&Array1<f64>, file: &
         .map(|x| x.iter().map(|y| y * dx).collect())
         .collect::<Vec<Vec<f64>>>();
 
-    let grid_center = vec![0.5 * (voxels.len_of(ndarray::Axis(0)) as f64) * dx, 0.5 * (voxels.len_of(ndarray::Axis(1)) as f64) * dx, 0.5 * (voxels.len_of(ndarray::Axis(2)) as f64) * dx];
+    let grid_center = vec![0.5 * (voxels.shape()[0] as f64) * dx, 0.5 * (voxels.shape()[1] as f64) * dx, 0.5 * (voxels.shape()[2] as f64) * dx];
+    println!("grid_center: {:?}", grid_center);
+    println!("mesh_center: {:?}", mesh_center);
 
     let ncell = voxels.iter().filter(|&&x| x != 0).count();
 

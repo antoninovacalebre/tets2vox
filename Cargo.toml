@@ -1,6 +1,6 @@
 [package]
 name = "tets2vox"
-version = "1.2.1"
+version = "1.2.2"
 authors = ["Antonino Vacalebre <vacalebre.antonino@spes.uniud.it>"]
 description = "Converts tetrahedral meshes (MSH 2.2) to voxel meshes (MSH 2.2, VoxHenry)."
 edition = "2021"

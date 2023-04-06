@@ -24,24 +24,31 @@ fn main() {
         .arg(
             arg!(-i --input ... "Input file")
                 .required(true)
-                .action(ArgAction::Set)
+                .action(ArgAction::Set),
         )
         .arg(
             arg!(-o --output ... "Output file")
                 .required(true)
-                .action(ArgAction::Set)
+                .action(ArgAction::Set),
         )
         .arg(
             arg!(-r --res ... "Resolution")
                 .required(true)
                 .action(ArgAction::Set)
-                .value_parser(clap::value_parser!(usize))
+                .value_parser(clap::value_parser!(usize)),
         )
         .get_matches();
 
     let res = matches.get_one::<usize>("res").unwrap();
     let input_file = matches.get_one::<String>("input").unwrap();
     let output_file = matches.get_one::<String>("output").unwrap();
+
+    let known_ext = ["msh", "msh2", "vhr"];
+    let out_ext = Path::new(&output_file).extension().unwrap();
+
+    if !known_ext.contains(&out_ext.to_str().unwrap()) {
+        panic!("[ERROR] Unknown output file extension: {:?}", out_ext);
+    }
 
     let (nodes, tets) = read_gmsh(input_file);
 
@@ -71,8 +78,6 @@ fn main() {
     println!("Filled voxels: {}", n_vox);
 
     println!("");
-    
-    let out_ext = Path::new(&output_file).extension().unwrap();
 
     if (out_ext == "msh") || (out_ext == "msh2") {
         println!("Writing MSH 2.2 file: {}", output_file);
@@ -80,10 +85,7 @@ fn main() {
     } else if out_ext == "vhr" {
         println!("Writing VHR file: {}", output_file);
         vox2vhr(&vox, dx, output_file);
-    } else {
-        panic!("Unknown output file extension: {:?}", out_ext);
     }
-
 
     let end_time = std::time::Instant::now();
     println!("");
@@ -126,18 +128,12 @@ fn tets2vox(tets: &Array3<f64>, res: usize) -> (Array3<i64>, f64, Array1<f64>) {
         let tet = tet.to_owned() - min_point.to_owned();
 
         let tet: Array2<f64> = tet.into_shape((4, 3)).unwrap();
-        let min_x =
-            (tet.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))[0] / h) as usize;
-        let max_x =
-            (tet.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))[0] / h) as usize;
-        let min_y =
-            (tet.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))[1] / h) as usize;
-        let max_y =
-            (tet.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))[1] / h) as usize;
-        let min_z =
-            (tet.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))[2] / h) as usize;
-        let max_z =
-            (tet.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))[2] / h) as usize;
+        let min_x = (tet.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))[0] / h) as usize;
+        let max_x = (tet.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))[0] / h) as usize;
+        let min_y = (tet.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))[1] / h) as usize;
+        let max_y = (tet.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))[1] / h) as usize;
+        let min_z = (tet.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))[2] / h) as usize;
+        let max_z = (tet.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))[2] / h) as usize;
 
         let max_x = max_x.min(res - 1);
         let max_y = max_y.min(res - 1);
@@ -196,7 +192,9 @@ fn read_gmsh(file: &str) -> (Array2<f64>, Array2<i64>) {
     let mut tets = Vec::new();
 
     for i in 0..nelem {
-        let line = lines[8 + nnode + i].split_whitespace().collect::<Vec<&str>>();
+        let line = lines[8 + nnode + i]
+            .split_whitespace()
+            .collect::<Vec<&str>>();
         if line[1] == "4" {
             tets.push([
                 line[5].trim().parse::<i64>().unwrap() - 1,

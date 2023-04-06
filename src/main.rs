@@ -67,7 +67,7 @@ fn main() {
     let n_vox = vox.iter().filter(|&&x| x == 1).count();
 
     println!("");
-    println!("Voxel size: {}", dx);
+    println!("Voxel size: {:.6e}", dx);
     println!("Voxel grid shape: {:?}", vox.shape());
     println!("Filled voxels: {}", n_vox);
 
@@ -101,9 +101,9 @@ fn tets2vox(tets: &Array3<f64>, res: usize) -> (Array3<i64>, f64, Array1<f64>) {
     let dx = dim.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y)) / (res as f64);
     let h = dx.first().unwrap();
 
-    let resx: usize = (dim[0] / h).ceil() as usize;
-    let resy: usize = (dim[1] / h).ceil() as usize;
-    let resz: usize = (dim[2] / h).ceil() as usize;
+    let resx: usize = (dim[0] / h).round() as usize;
+    let resy: usize = (dim[1] / h).round() as usize;
+    let resz: usize = (dim[2] / h).round() as usize;
     let mut vox: Array3<i64> = Array3::<i64>::zeros((resx, resy, resz));
 
     // h is the voxel size (scalar, since the voxels are cubic)
@@ -132,9 +132,9 @@ fn tets2vox(tets: &Array3<f64>, res: usize) -> (Array3<i64>, f64, Array1<f64>) {
         let min_z = (tet.fold_axis(Axis(0), f64::INFINITY, |&x, &y| x.min(y))[2] / h) as usize;
         let max_z = (tet.fold_axis(Axis(0), f64::NEG_INFINITY, |&x, &y| x.max(y))[2] / h) as usize;
 
-        let max_x = max_x.min(res - 1);
-        let max_y = max_y.min(res - 1);
-        let max_z = max_z.min(res - 1);
+        let max_x = max_x.min(resx - 1);
+        let max_y = max_y.min(resy - 1);
+        let max_z = max_z.min(resz - 1);
 
         for i in min_x..=max_x {
             for j in min_y..=max_y {

@@ -4,6 +4,39 @@ use std::io::{BufWriter, Write};
 
 use ndarray::prelude::*;
 
+pub fn vox2vhr(voxels: &Array3<i64>, dx: f64, file: &str) {
+    let mut gnd_vox : Array1<i64> = array![0, 0, 0];
+    let mut gnd_vox_set : bool = false;
+
+    let f = File::create(file).unwrap();
+    let mut writer = BufWriter::new(f);
+
+    writeln!(writer, "freq=1.0").unwrap();
+    writeln!(writer, "dx={}", dx).unwrap();
+    writeln!(writer, "LMN={},{},{}", voxels.shape()[0], voxels.shape()[1], voxels.shape()[2]).unwrap();
+    writeln!(writer, "").unwrap();
+
+    writeln!(writer, "StartVoxelList").unwrap();
+    for i in 0..voxels.shape()[0] {
+        for j in 0..voxels.shape()[1] {
+            for k in 0..voxels.shape()[2] {
+                if voxels[[i, j, k]] > 0 {
+                    if !gnd_vox_set {
+                        gnd_vox = array![i as i64, j as i64, k as i64];
+                        gnd_vox_set = true;
+                    }
+
+                    writeln!(writer, "V {} {} {} {:e}", i, j, k, voxels[[i, j, k]] as f64).unwrap();                    
+                }
+            }
+        }
+    }
+    writeln!(writer, "EndVoxelList").unwrap();
+    writeln!(writer, "N port1 N {} {} {} -z", gnd_vox[0], gnd_vox[1], gnd_vox[2]).unwrap();
+
+    writer.flush().unwrap();
+}
+
 pub fn vox2gmsh(voxels: &Array3<i64>, dx: f64, mesh_center:&Array1<f64>, file: &str) {
     // Map of faces to stitch together as a list
     // of tuples (vector_offsets, faces_to_stitch)

@@ -1,9 +1,10 @@
 # tets2vox
-Converts tetrahedral meshes to voxel meshes (gmsh 2.2 format).
+Converts tetrahedral meshes (MSH 2.2) to voxel meshes (MSH 2.2, VoxHenry).
 
 ## Usage
 
-Input file format: GMSH 2.2 Format tetrahedra mesh.
+Input file format: MSH 2.2 Format tetrahedra mesh.
+Output file format: MSH 2.2 if output extension is `.msh` or `.msh2`, VoxHenry if output extension is `.vhr`. 
 
 ```
 Usage: tets2vox.exe --input <input> --output <output> --res <res>

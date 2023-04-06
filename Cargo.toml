@@ -1,8 +1,8 @@
 [package]
 name = "tets2vox"
-version = "1.1.2"
+version = "1.2.0"
 authors = ["Antonino Vacalebre <vacalebre.antonino@spes.uniud.it>"]
-description = "Converts tetrahedral meshes to voxel meshes (gmsh 2.2 format)"
+description = "Converts tetrahedral meshes (MSH 2.2) to voxel meshes (MSH 2.2, VoxHenry)."
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

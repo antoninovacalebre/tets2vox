@@ -3,9 +3,10 @@ pub mod voxio;
 
 use clap::{arg, command, ArgAction};
 use ndarray::prelude::*;
+use std::path::Path;
 
 use progress_bar::{pb_init, pb_update};
-use voxio::vox2gmsh;
+use voxio::{vox2gmsh, vox2vhr};
 
 fn main() {
     let tets2vox_time = std::time::Instant::now();
@@ -69,11 +70,20 @@ fn main() {
     println!("Voxel grid shape: {:?}", vox.shape());
     println!("Filled voxels: {}", n_vox);
 
-    // vox2txt(&vox, "tests/voxels.txt");
     println!("");
-    println!("Writing to file: {}", output_file);
+    
+    let out_ext = Path::new(&output_file).extension().unwrap();
 
-    vox2gmsh(&vox, dx, &mesh_center, output_file);
+    if (out_ext == "msh") || (out_ext == "msh2") {
+        println!("Writing MSH 2.2 file: {}", output_file);
+        vox2gmsh(&vox, dx, &mesh_center, output_file);
+    } else if out_ext == "vhr" {
+        println!("Writing VHR file: {}", output_file);
+        vox2vhr(&vox, dx, output_file);
+    } else {
+        panic!("Unknown output file extension: {:?}", out_ext);
+    }
+
 
     let end_time = std::time::Instant::now();
     println!("");

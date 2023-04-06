@@ -13,13 +13,7 @@ fn main() {
 
     let matches = command!()
         .help_template(
-            "\
-{before-help}{name} {version}
-{author-with-newline}{about-with-newline}
-{usage-heading} {usage}
-
-{all-args}{after-help}
-            ",
+            "{before-help}{name} {version}\n{author-with-newline}\n{about-with-newline}\n{usage-heading} {usage}\n\n{all-args}{after-help}",
         )
         .arg(
             arg!(-i --input ... "Input file")

@@ -6,7 +6,7 @@ use ndarray::prelude::*;
 use std::path::Path;
 
 use progress_bar::{pb_init, pb_update};
-use voxio::{vox2gmsh, vox2vhr};
+use voxio::{vox2gmsh, vox2vhr, vhr2vox};
 
 fn main() {
     let tets2vox_time = std::time::Instant::now();
@@ -26,41 +26,66 @@ fn main() {
                 .action(ArgAction::Set),
         )
         .arg(
-            arg!(-r --res ... "Resolution")
-                .required(true)
+            arg!(-r --res ... "Resolution (default 100)")
+                .required(false)
                 .action(ArgAction::Set)
                 .value_parser(clap::value_parser!(usize)),
         )
         .get_matches();
 
-    let res = matches.get_one::<usize>("res").unwrap();
     let input_file = matches.get_one::<String>("input").unwrap();
     let output_file = matches.get_one::<String>("output").unwrap();
-
-    let known_ext = ["msh", "msh2", "vhr"];
+    
+    let known_ext_in = ["msh", "msh2", "vhr"];
+    let known_ext_out = ["msh", "msh2", "vhr"];
+    let in_ext = Path::new(&input_file).extension().unwrap();
     let out_ext = Path::new(&output_file).extension().unwrap();
-
-    if !known_ext.contains(&out_ext.to_str().unwrap()) {
+    
+    if !known_ext_out.contains(&out_ext.to_str().unwrap()) {
         panic!("[ERROR] Unknown output file extension: {:?}", out_ext);
     }
-
-    let (nodes, tets) = read_gmsh(input_file);
-
-    let mut tets_nodes: Array3<f64>;
-    tets_nodes = Array3::<f64>::zeros((tets.shape()[0], 4, 3));
-    for (i, tet) in tets.outer_iter().enumerate() {
-        for (j, node) in tet.iter().enumerate() {
-            tets_nodes[[i, j, 0]] = nodes[[*node as usize, 0]];
-            tets_nodes[[i, j, 1]] = nodes[[*node as usize, 1]];
-            tets_nodes[[i, j, 2]] = nodes[[*node as usize, 2]];
-        }
+    if !known_ext_in.contains(&in_ext.to_str().unwrap()) {
+        panic!("[ERROR] Unknown input file extension: {:?}", in_ext);
     }
 
-    println!("");
-    println!("Number of tetrahedra: {}", tets_nodes.shape()[0]);
-    println!("Number of nodes: {}", nodes.shape()[0]);
+    let res = match matches.get_one::<usize>("res") {
+        Some(res) => {
+            if (in_ext == "msh") || (in_ext == "msh2") {
+                res
+            } else {
+                panic!("[ERROR] Resolution isn't used for VHR files.")
+            }
+        },
+        None => &100
+     };
+    
+    // let res = matches.get_one::<usize>("res").unwrap();
 
-    let (vox, dx, mesh_center) = tets2vox(&tets_nodes, *res);
+    let vox: Array3<i64>;
+    let dx: f64;
+    let mesh_center: Array1<f64>;
+
+    if (in_ext == "msh") || (in_ext == "msh2") {
+        let (nodes, tets) = read_gmsh(input_file);
+    
+        let mut tets_nodes: Array3<f64>;
+        tets_nodes = Array3::<f64>::zeros((tets.shape()[0], 4, 3));
+        for (i, tet) in tets.outer_iter().enumerate() {
+            for (j, node) in tet.iter().enumerate() {
+                tets_nodes[[i, j, 0]] = nodes[[*node as usize, 0]];
+                tets_nodes[[i, j, 1]] = nodes[[*node as usize, 1]];
+                tets_nodes[[i, j, 2]] = nodes[[*node as usize, 2]];
+            }
+        }
+    
+        println!("");
+        println!("Number of tetrahedra: {}", tets_nodes.shape()[0]);
+        println!("Number of nodes: {}", nodes.shape()[0]);
+    
+        (vox, dx, mesh_center) = tets2vox(&tets_nodes, *res);
+    } else {
+        (vox, dx, mesh_center) = vhr2vox(input_file);
+    }
 
     println!("Took {} seconds", tets2vox_time.elapsed().as_secs_f64());
 

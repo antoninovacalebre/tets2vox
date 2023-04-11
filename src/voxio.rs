@@ -4,16 +4,109 @@ use std::io::{BufWriter, Write};
 
 use ndarray::prelude::*;
 
+pub fn vhr2vox(file: &str) -> (Array3<i64>, f64, Array1<f64>) {
+    // VHR file format :
+    // - Commented lines start with % or *
+    // - we can ignore the ports
+
+    // Example :
+    // freq=1.0
+    // dx=0.0001
+    // LMN=100,100,100
+    //
+    // StartVoxelList
+    // V 0 0 0 1.000000e+00
+    // V 0 0 1 1.000000e+00
+    // ...
+    // EndVoxelList
+    // N port1 N 0 0 0 -z
+    // N port2 N 99 99 99 z
+
+    let mut vhrvoxels: HashMap<(i64, i64, i64), i64> = HashMap::new();
+    let mut dx: f64 = 0.0;
+    let mut lmn: [usize; 3] = [0, 0, 0];
+
+    enum VHRState {
+        Preamble,
+        VoxelList,
+        PortList,
+    }
+
+    let mut state = VHRState::Preamble;
+
+    let lines = std::fs::read_to_string(file).unwrap();
+    let lines: Vec<&str> = lines.split("\r").collect();
+
+    for line in lines {
+        let line = line.trim();
+
+        if line.starts_with("%") || line.starts_with("*") {
+            continue;
+        }
+
+        match state {
+            VHRState::Preamble => {
+                if line.starts_with("dx=") {
+                    dx = line.split("=").collect::<Vec<&str>>()[1]
+                        .trim()
+                        .parse::<f64>()
+                        .unwrap();
+                } else if line.starts_with("LMN=") {
+                    let lmn_str = line.split("=").collect::<Vec<&str>>()[1].trim();
+                    let lmn_str = lmn_str.split(",").collect::<Vec<&str>>();
+                    lmn[0] = lmn_str[0].parse::<usize>().unwrap();
+                    lmn[1] = lmn_str[1].parse::<usize>().unwrap();
+                    lmn[2] = lmn_str[2].parse::<usize>().unwrap();
+                } else if line.starts_with("StartVoxelList") {
+                    state = VHRState::VoxelList;
+                } else {
+                    continue;
+                }
+            }
+            VHRState::VoxelList => {
+                if line.starts_with("EndVoxelList") {
+                    state = VHRState::PortList;
+                } else if line.starts_with("V") {
+                    let line = line.split_whitespace().collect::<Vec<&str>>();
+                    let i = line[1].parse::<i64>().unwrap() - 1;
+                    let j = line[2].parse::<i64>().unwrap() - 1;
+                    let k = line[3].parse::<i64>().unwrap() - 1;
+                    vhrvoxels.insert((i, j, k), 1);
+                } else {
+                    continue;
+                }
+            }
+            VHRState::PortList => {
+                continue;
+            }
+        };
+    }
+
+    let mut voxels = Array3::<i64>::zeros((lmn[0], lmn[1], lmn[2]));
+    for ((i, j, k), _v) in vhrvoxels {
+        voxels[[i as usize, j as usize, k as usize]] = 1;
+    }
+
+    (voxels, dx, array![0.0, 0.0, 0.0])
+}
+
 pub fn vox2vhr(voxels: &Array3<i64>, dx: f64, file: &str) {
-    let mut gnd_vox : Array1<i64> = array![0, 0, 0];
-    let mut gnd_vox_set : bool = false;
+    let mut gnd_vox: Array1<i64> = array![0, 0, 0];
+    let mut gnd_vox_set: bool = false;
 
     let f = File::create(file).unwrap();
     let mut writer = BufWriter::new(f);
 
     writeln!(writer, "freq=1.0").unwrap();
     writeln!(writer, "dx={}", dx).unwrap();
-    writeln!(writer, "LMN={},{},{}", voxels.shape()[0], voxels.shape()[1], voxels.shape()[2]).unwrap();
+    writeln!(
+        writer,
+        "LMN={},{},{}",
+        voxels.shape()[0],
+        voxels.shape()[1],
+        voxels.shape()[2]
+    )
+    .unwrap();
     writeln!(writer, "").unwrap();
 
     writeln!(writer, "StartVoxelList").unwrap();
@@ -26,18 +119,33 @@ pub fn vox2vhr(voxels: &Array3<i64>, dx: f64, file: &str) {
                         gnd_vox_set = true;
                     }
 
-                    writeln!(writer, "V {} {} {} {:e}", i, j, k, voxels[[i, j, k]] as f64).unwrap();                    
+                    writeln!(
+                        writer,
+                        "V {} {} {} {:e}",
+                        i + 1,
+                        j + 1,
+                        k + 1,
+                        voxels[[i, j, k]] as f64
+                    )
+                    .unwrap();
                 }
             }
         }
     }
     writeln!(writer, "EndVoxelList").unwrap();
-    writeln!(writer, "N port1 N {} {} {} -z", gnd_vox[0], gnd_vox[1], gnd_vox[2]).unwrap();
+    writeln!(
+        writer,
+        "N port1 N {} {} {} -z",
+        gnd_vox[0] + 1,
+        gnd_vox[1] + 1,
+        gnd_vox[2] + 1
+    )
+    .unwrap();
 
     writer.flush().unwrap();
 }
 
-pub fn vox2gmsh(voxels: &Array3<i64>, dx: f64, mesh_center:&Array1<f64>, file: &str) {
+pub fn vox2gmsh(voxels: &Array3<i64>, dx: f64, mesh_center: &Array1<f64>, file: &str) {
     // Map of faces to stitch together as a list
     // of tuples (vector_offsets, faces_to_stitch)
     let stitch_map: Vec<(Vec<i64>, Vec<i64>)> = vec![
@@ -85,7 +193,11 @@ pub fn vox2gmsh(voxels: &Array3<i64>, dx: f64, mesh_center:&Array1<f64>, file: &
         .map(|x| x.iter().map(|y| y * dx).collect())
         .collect::<Vec<Vec<f64>>>();
 
-    let grid_center = vec![0.5 * (voxels.shape()[0] as f64) * dx, 0.5 * (voxels.shape()[1] as f64) * dx, 0.5 * (voxels.shape()[2] as f64) * dx];
+    let grid_center = vec![
+        0.5 * (voxels.shape()[0] as f64) * dx,
+        0.5 * (voxels.shape()[1] as f64) * dx,
+        0.5 * (voxels.shape()[2] as f64) * dx,
+    ];
 
     let ncell = voxels.iter().filter(|&&x| x != 0).count();
 
@@ -130,7 +242,7 @@ pub fn vox2gmsh(voxels: &Array3<i64>, dx: f64, mesh_center:&Array1<f64>, file: &
                 let mut new_node = vec![
                     coord[0] + offsets[i][0] - (grid_center[0] - mesh_center[0]),
                     coord[1] + offsets[i][1] - (grid_center[1] - mesh_center[1]),
-                    coord[2] + offsets[i][2] - (grid_center[2] - mesh_center[2])
+                    coord[2] + offsets[i][2] - (grid_center[2] - mesh_center[2]),
                 ];
                 new_node = new_node.iter().map(|x| *x).collect();
                 nodes.push(new_node);

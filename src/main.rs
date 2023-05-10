@@ -79,8 +79,9 @@ fn main() {
         }
     
         println!("");
-        println!("Number of tetrahedra: {}", tets_nodes.shape()[0]);
-        println!("Number of nodes: {}", nodes.shape()[0]);
+        println!("Input file read");
+        println!("   Number of tetrahedra: {}", tets_nodes.shape()[0]);
+        println!("   Number of nodes: {}", nodes.shape()[0]);
     
         (vox, dx, mesh_center) = tets2vox(&tets_nodes, *res);
     } else {
@@ -265,7 +266,7 @@ fn is_point_in_tet(p: &Array1<f64>, tet: &Array2<f64>) -> bool {
         &p,
     ) / v;
 
-    alpha >= 0.0 && beta >= 0.0 && gamma >= 0.0 && delta >= 0.0
+    alpha >= -1e-9 && beta >= -1e-9 && gamma >= -1e-9 && delta >= -1e-9
 }
 
 fn signed_volume(a: &Array1<f64>, b: &Array1<f64>, c: &Array1<f64>, d: &Array1<f64>) -> f64 {

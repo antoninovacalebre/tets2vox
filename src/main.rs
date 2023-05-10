@@ -38,8 +38,8 @@ fn main() {
     
     let known_ext_in = ["msh", "msh2", "vhr"];
     let known_ext_out = ["msh", "msh2", "vhr"];
-    let in_ext = Path::new(&input_file).extension().unwrap();
-    let out_ext = Path::new(&output_file).extension().unwrap();
+    let in_ext = Path::new(&input_file).extension().expect("[ERROR] Input file has no extension.");
+    let out_ext = Path::new(&output_file).extension().expect("[ERROR] Output file has no extension.");
     
     if !known_ext_out.contains(&out_ext.to_str().unwrap()) {
         panic!("[ERROR] Unknown output file extension: {:?}", out_ext);

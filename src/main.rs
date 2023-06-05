@@ -6,7 +6,7 @@ use ndarray::prelude::*;
 use std::path::Path;
 
 use progress_bar::{pb_init, pb_update};
-use voxio::{vox2gmsh, vox2vhr, vhr2vox};
+use voxio::{vhr2vox, vox2gmsh, vox2vhr};
 
 fn main() {
     let tets2vox_time = std::time::Instant::now();
@@ -35,12 +35,16 @@ fn main() {
 
     let input_file = matches.get_one::<String>("input").unwrap();
     let output_file = matches.get_one::<String>("output").unwrap();
-    
+
     let known_ext_in = ["msh", "msh2", "vhr"];
     let known_ext_out = ["msh", "msh2", "vhr"];
-    let in_ext = Path::new(&input_file).extension().expect("[ERROR] Input file has no extension.");
-    let out_ext = Path::new(&output_file).extension().expect("[ERROR] Output file has no extension.");
-    
+    let in_ext = Path::new(&input_file)
+        .extension()
+        .expect("[ERROR] Input file has no extension.");
+    let out_ext = Path::new(&output_file)
+        .extension()
+        .expect("[ERROR] Output file has no extension.");
+
     if !known_ext_out.contains(&out_ext.to_str().unwrap()) {
         panic!("[ERROR] Unknown output file extension: {:?}", out_ext);
     }
@@ -55,11 +59,9 @@ fn main() {
             } else {
                 panic!("[ERROR] Resolution isn't used for VHR files.")
             }
-        },
-        None => &100
-     };
-    
-    // let res = matches.get_one::<usize>("res").unwrap();
+        }
+        None => &100,
+    };
 
     let vox: Array3<i64>;
     let dx: f64;
@@ -67,7 +69,7 @@ fn main() {
 
     if (in_ext == "msh") || (in_ext == "msh2") {
         let (nodes, tets) = read_gmsh(input_file);
-    
+
         let mut tets_nodes: Array3<f64>;
         tets_nodes = Array3::<f64>::zeros((tets.shape()[0], 4, 3));
         for (i, tet) in tets.outer_iter().enumerate() {
@@ -77,12 +79,12 @@ fn main() {
                 tets_nodes[[i, j, 2]] = nodes[[*node as usize, 2]];
             }
         }
-    
+
         println!("");
         println!("Input file read");
         println!("   Number of tetrahedra: {}", tets_nodes.shape()[0]);
         println!("   Number of nodes: {}", nodes.shape()[0]);
-    
+
         (vox, dx, mesh_center) = tets2vox(&tets_nodes, *res);
     } else {
         (vox, dx, mesh_center) = vhr2vox(input_file);

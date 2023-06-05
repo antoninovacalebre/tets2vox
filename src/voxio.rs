@@ -26,6 +26,7 @@ pub fn vhr2vox(file: &str) -> (Array3<i64>, f64, Array1<f64>) {
     let mut dx: f64 = 0.0;
     let mut lmn: [usize; 3] = [0, 0, 0];
 
+    #[derive(Debug)]
     enum VHRState {
         Preamble,
         VoxelList,
@@ -35,15 +36,15 @@ pub fn vhr2vox(file: &str) -> (Array3<i64>, f64, Array1<f64>) {
     let mut state = VHRState::Preamble;
 
     let lines = std::fs::read_to_string(file).unwrap();
-    let lines: Vec<&str> = lines.split("\r").collect();
+    let lines: Vec<&str> = lines.lines().collect();
 
     for line in lines {
         let line = line.trim();
-
+        
         if line.starts_with("%") || line.starts_with("*") {
             continue;
         }
-
+        
         match state {
             VHRState::Preamble => {
                 if line.starts_with("dx=") {
